@@ -108,13 +108,13 @@ export default function Page() {
         onClick={save}
         className="fixed right-6 bottom-6 rounded-full px-7 py-3 text-base shadow-lg bg-gray-100 hover:bg-gray-200 text-black font-semibold transition"
       >
-        保存
+        保存する
       </button>
       <button
         onClick={() => router.push("/review")}
         className="fixed left-6 bottom-6 rounded-full px-7 py-3 text-base shadow-lg bg-gray-100 hover:bg-gray-200 text-black font-semibold transition"
       >
-        振り返り
+        振り返る
       </button>
     </main>
   );

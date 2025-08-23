@@ -152,6 +152,119 @@ export default function ReviewPage() {
     setPage(Math.max(ordered.length - 1, 0));
   }, [logs, pageHeight, FONT_SIZE, LINE_HEIGHT, ITEM_GAP, TOP_PADDING]);
 
+  // ページ確定型分割ロジック
+  useEffect(() => {
+    if (!pageHeight) return;
+    const contentWidth =
+      contentRef.current?.clientWidth ?? Math.min(window.innerWidth - 64, 680);
+
+    // 既存ページを保持（ページ確定型）
+    let prevPages = pages.length > 0 ? [...pages] : [];
+    let logsToProcess = logs.slice();
+
+    // 既存ページを再利用（満帆ページはそのまま）
+    let lockedPages: MemoItem[][] = [];
+    let lockedCount = 0;
+    for (const pageArr of prevPages) {
+      let pageHeightSum = TOP_PADDING;
+      for (const l of pageArr) {
+        const measurer = document.createElement("div");
+        Object.assign(measurer.style, {
+          position: "absolute",
+          visibility: "hidden",
+          left: "-9999px",
+          top: "0px",
+          width: `${contentWidth}px`,
+          fontFamily:
+            "'Kosugi Maru', 'Indie Flower', cursive, 'Noto Sans JP', sans-serif",
+          fontSize: `${FONT_SIZE}px`,
+          lineHeight: `${LINE_HEIGHT}px`,
+          whiteSpace: "pre-wrap",
+          boxSizing: "border-box",
+          padding: "0",
+          margin: "0",
+        } as CSSStyleDeclaration);
+        document.body.appendChild(measurer);
+        measurer.innerText = `${new Date(l.ts).toLocaleDateString("ja-JP", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          weekday: "short",
+        })} ${new Date(l.ts).toLocaleTimeString("ja-JP", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}\n${l.text}`;
+        const h = Math.ceil(measurer.getBoundingClientRect().height);
+        document.body.removeChild(measurer);
+        pageHeightSum += h + ITEM_GAP;
+      }
+      // ページが満帆ならロック
+      if (pageHeightSum > pageHeight) {
+        lockedPages.push(pageArr);
+        lockedCount += pageArr.length;
+      } else {
+        break;
+      }
+    }
+
+    // ロックされた分を除いた新しいメモだけ分割
+    logsToProcess = logs.slice(lockedCount);
+
+    // 新しい分割
+    const arr: MemoItem[][] = [];
+    let current: MemoItem[] = [];
+    let currentHeight = TOP_PADDING;
+
+    const formatTimestamp = (ts: number) =>
+      `${new Date(ts).toLocaleDateString("ja-JP", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        weekday: "short",
+      })} ${new Date(ts).toLocaleTimeString("ja-JP", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })}`;
+
+    for (const l of logsToProcess) {
+      const measurer = document.createElement("div");
+      Object.assign(measurer.style, {
+        position: "absolute",
+        visibility: "hidden",
+        left: "-9999px",
+        top: "0px",
+        width: `${contentWidth}px`,
+        fontFamily:
+          "'Kosugi Maru', 'Indie Flower', cursive, 'Noto Sans JP', sans-serif",
+        fontSize: `${FONT_SIZE}px`,
+        lineHeight: `${LINE_HEIGHT}px`,
+        whiteSpace: "pre-wrap",
+        boxSizing: "border-box",
+        padding: "0",
+        margin: "0",
+      } as CSSStyleDeclaration);
+      document.body.appendChild(measurer);
+      measurer.innerText = `${formatTimestamp(l.ts)}\n${l.text}`;
+      const h = Math.ceil(measurer.getBoundingClientRect().height);
+      document.body.removeChild(measurer);
+      const totalH = h + ITEM_GAP;
+
+      if (currentHeight + totalH > pageHeight && current.length > 0) {
+        arr.push(current);
+        current = [];
+        currentHeight = TOP_PADDING;
+      }
+      current.push(l);
+      currentHeight += totalH;
+    }
+    if (current.length > 0) arr.push(current);
+
+    // ページ配列を逆順にして、右端が最新ページ
+    const ordered = [...lockedPages, ...arr].length ? [...lockedPages, ...arr].reverse() : [[]];
+    setPages(ordered);
+    setPage(Math.max(ordered.length - 1, 0));
+  }, [logs, pageHeight, FONT_SIZE, LINE_HEIGHT, ITEM_GAP, TOP_PADDING]);
+
   const handlers = useSwipeable({
     // 最新ページから左スワイプで過去へ（index+1）、右スワイプで新しい（index-1）
     onSwipedLeft: () => setPage((p) => Math.min(p + 1, pages.length - 1)),
@@ -333,7 +446,7 @@ export default function ReviewPage() {
           onClick={() => router.push("/")}
           className="rounded-full px-7 py-3 text-base shadow-lg bg-gray-100 hover:bg-gray-200 text-black font-semibold transition"
         >
-          記載画面に戻る
+          書く
         </button>
         <button
           onClick={() => router.push("/settings")}
