@@ -1,36 +1,43 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { auth, login, logout } from "../lib/firebase";
+import { onAuthStateChanged, type User } from "firebase/auth";
 
-export default function SakuMemoMobile() {
-  // 1行メモをどんどん残す（ローカル保存付き）
+type MemoItem = { id: string; text: string; ts: number };
+
+const STORAGE_KEY = "saku-memo.logs.v1";
+
+export default function Page() {
+  // --- 認証状態 ---
+  const [user, setUser] = useState<User | null>(null);
+  useEffect(() => onAuthStateChanged(auth, setUser), []);
+
+  // --- メモ状態（ローカル保存のMVPそのまま） ---
   const [text, setText] = useState("");
-  const [logs, setLogs] = useState<string[]>([]);
+  const [logs, setLogs] = useState<MemoItem[]>([]);
   const [showLog, setShowLog] = useState(false);
-  const areaRef = useRef<HTMLTextAreaElement | null>(null);
+  const taRef = useRef<HTMLTextAreaElement | null>(null);
 
-  // --- 永続化（localStorage） ---
+  // 起動時に localStorage から復元
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("saku_memo_logs");
-      if (saved) setLogs(JSON.parse(saved));
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as MemoItem[];
+        setLogs(parsed);
+      }
     } catch {}
   }, []);
+
+  // 保存のたびに localStorage へ反映
   useEffect(() => {
     try {
-      localStorage.setItem("saku_memo_logs", JSON.stringify(logs));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(logs));
     } catch {}
   }, [logs]);
 
-  const save = () => {
-    const v = text.trim();
-    if (!v) return;
-    setLogs((prev) => [...prev, v]);
-    setText("");
-    areaRef.current?.focus();
-  };
-
-  // エンターで保存、Shift+Enterで改行
+  // Enter = 保存 / Shift+Enter = 改行
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -38,56 +45,117 @@ export default function SakuMemoMobile() {
     }
   };
 
-  return (
-    <div className="min-h-[100svh] bg-white">
-      {!showLog ? (
-        <>
-          {/* 右上：過去メモボタン */}
-          <div className="fixed top-3 right-3 z-10">
-            <button
-              onClick={() => setShowLog(true)}
-              className="rounded-full px-3 py-1 text-sm bg-black text-white/90 shadow"
-              aria-label="過去のメモを見る"
-            >
-              履歴
-            </button>
-          </div>
+  const save = () => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const item: MemoItem = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      text: trimmed,
+      ts: Date.now(),
+    };
+    setLogs((prev) => [item, ...prev]);
+    setText("");
+    // 入力欄にフォーカス戻す
+    requestAnimationFrame(() => taRef.current?.focus());
+  };
 
-          {/* 画面全体がメモ（テキストエリアが全面） */}
-          <textarea
-            ref={areaRef}
-            autoFocus
-            placeholder={`ここが全部メモ。\n思いついたらすぐ書いて、Enterで保存（Shift+Enterで改行）`}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={onKeyDown}
-            className="fixed inset-0 w-full h-[100svh] resize-none p-4 text-[18px] leading-7 outline-none bg-amber-50/40 text-gray-800 placeholder-gray-400"
-          />
-        </>
-      ) : (
-        <div className="min-h-[100svh] flex flex-col">
-          <div className="flex items-center justify-between px-4 py-3 border-b">
-            <h1 className="font-semibold">過去のメモ</h1>
+  const formatted = useMemo(
+    () =>
+      logs.map((l) => ({
+        ...l,
+        date: new Date(l.ts).toLocaleString(),
+      })),
+    [logs]
+  );
+
+  return (
+    <main className="min-h-dvh bg-white text-gray-800">
+      {/* ヘッダー（ログインUI＋履歴トグル） */}
+      <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b bg-white/80 px-4 py-3 backdrop-blur">
+        <div className="flex items-center gap-3">
+          <span className="font-semibold">サクメモ</span>
+          <button
+            onClick={() => setShowLog((v) => !v)}
+            className="rounded border px-3 py-1 text-sm hover:bg-gray-50"
+            aria-pressed={showLog}
+          >
+            {showLog ? "入力へ" : "履歴"}
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {user ? (
+            <>
+              <span className="hidden text-sm md:inline">
+                こんにちは、{user.displayName ?? user.email ?? "ユーザー"} さん
+              </span>
+              <button
+                onClick={logout}
+                className="rounded border px-3 py-1 text-sm hover:bg-gray-50"
+              >
+                ログアウト
+              </button>
+            </>
+          ) : (
             <button
-              onClick={() => setShowLog(false)}
-              className="rounded px-3 py-1 text-sm bg-black text-white/90"
+              onClick={login}
+              className="rounded border px-3 py-1 text-sm hover:bg-gray-50"
             >
-              戻る
+              Googleでログイン
             </button>
+          )}
+        </div>
+      </header>
+
+      {/* 本体 */}
+      {!showLog ? (
+        <section className="p-4">
+          <div className="mx-auto max-w-3xl">
+            <textarea
+              ref={taRef}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={onKeyDown}
+              placeholder={"思ったことをすぐ書く。\nEnterで保存 / Shift+Enterで改行"}
+              className="h-[70vh] w-full resize-none rounded-2xl border p-4 outline-none focus:ring"
+              autoFocus
+            />
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-xs text-gray-500">
+                Enterで保存 / Shift+Enterで改行
+              </span>
+              <button
+                onClick={save}
+                className="rounded-xl border px-4 py-2 text-sm hover:bg-gray-50"
+              >
+                保存
+              </button>
+            </div>
           </div>
-          <div className="flex-1 overflow-y-auto p-4">
-            {logs.length === 0 ? (
-              <p className="text-gray-500">まだ何も書かれていません。</p>
+        </section>
+      ) : (
+        <section className="p-4">
+          <div className="mx-auto max-w-3xl">
+            {formatted.length === 0 ? (
+              <p className="text-sm text-gray-500">まだメモはありません。</p>
             ) : (
               <ul className="space-y-3">
-                {logs.map((l, i) => (
-                  <li key={i} className="border-b pb-3 whitespace-pre-wrap break-words text-gray-800">{l}</li>
+                {formatted.map((l) => (
+                  <li
+                    key={l.id}
+                    className="rounded-2xl border p-4 hover:bg-gray-50"
+                  >
+                    <div className="mb-1 text-xs text-gray-500">{l.date}</div>
+                    <pre className="whitespace-pre-wrap font-sans text-[15px] leading-relaxed">
+                      {l.text}
+                    </pre>
+                  </li>
                 ))}
               </ul>
             )}
           </div>
-        </div>
+        </section>
       )}
-    </div>
+    </main>
   );
 }
