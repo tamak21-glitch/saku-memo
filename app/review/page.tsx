@@ -152,7 +152,7 @@ export default function ReviewPage() {
     setPage(Math.max(ordered.length - 1, 0));
   }, [logs, pageHeight, FONT_SIZE, LINE_HEIGHT, ITEM_GAP, TOP_PADDING]);
 
-  // ページ確定型分割ロジック
+  // ★このuseEffectだけ残す（lockedPages方式）
   useEffect(() => {
     if (!pageHeight) return;
     const contentWidth =
