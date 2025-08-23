@@ -6,6 +6,7 @@ import {
   signInWithPopup,
   signOut,
 } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
@@ -20,6 +21,20 @@ const firebaseConfig = {
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const provider = new GoogleAuthProvider();
+export const db = getFirestore(app);
 
-export const login = () => signInWithPopup(auth, provider);
-export const logout = () => signOut(auth);
+export const login = async () => {
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (e) {
+    console.error("ログイン失敗:", e);
+  }
+};
+
+export const logout = async () => {
+  try {
+    await signOut(auth);
+  } catch (e) {
+    console.error("ログアウト失敗:", e);
+  }
+};
