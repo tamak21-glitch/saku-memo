@@ -28,6 +28,9 @@ export default function Page() {
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveActive, setSaveActive] = useState(false);
+  const [reviewActive, setReviewActive] = useState(false);
 
   // 認証チェック＆未ログインなら /login へリダイレクト
   useEffect(() => {
@@ -62,6 +65,7 @@ export default function Page() {
     const trimmed = text.trim();
     if (!trimmed || !user) return;
     try {
+      setSaving(true);
       await addDoc(collection(db, "memos"), {
         uid: user.uid,
         text: trimmed,
@@ -82,6 +86,8 @@ export default function Page() {
     } catch (e: any) {
       console.error("Firestore保存エラー:", e);
       alert("保存に失敗しました: " + e.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -94,6 +100,17 @@ export default function Page() {
     [logs]
   );
 
+  // ボタンのアクティブ色制御（長押し時のみ色変更、クリック/タップは即反応）
+  const saveBtnColor = saving
+    ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+    : saveActive
+    ? "bg-blue-200 text-blue-700"
+    : "bg-gray-100 hover:bg-gray-200 text-black";
+
+  const reviewBtnColor = reviewActive
+    ? "bg-blue-200 text-blue-700"
+    : "bg-gray-100 hover:bg-gray-200 text-black";
+
   return (
     <main className="min-h-dvh bg-white relative flex flex-col items-center justify-center text-black">
       <textarea
@@ -105,14 +122,25 @@ export default function Page() {
         autoFocus
       />
       <button
+        onMouseDown={() => setSaveActive(true)}
+        onMouseUp={() => setSaveActive(false)}
+        onMouseLeave={() => setSaveActive(false)}
+        onTouchStart={() => setSaveActive(true)}
+        onTouchEnd={() => setSaveActive(false)}
         onClick={save}
-        className="fixed right-6 bottom-6 rounded-full px-7 py-3 text-base shadow-lg bg-gray-100 hover:bg-gray-200 text-black font-semibold transition"
+        disabled={saving}
+        className={`fixed right-6 bottom-6 rounded-full px-7 py-3 text-base shadow-lg font-semibold transition ${saveBtnColor}`}
       >
-        保存する
+        {saving ? "保存中..." : "保存する"}
       </button>
       <button
+        onMouseDown={() => setReviewActive(true)}
+        onMouseUp={() => setReviewActive(false)}
+        onMouseLeave={() => setReviewActive(false)}
+        onTouchStart={() => setReviewActive(true)}
+        onTouchEnd={() => setReviewActive(false)}
         onClick={() => router.push("/review")}
-        className="fixed left-6 bottom-6 rounded-full px-7 py-3 text-base shadow-lg bg-gray-100 hover:bg-gray-200 text-black font-semibold transition"
+        className={`fixed left-6 bottom-6 rounded-full px-7 py-3 text-base shadow-lg font-semibold transition ${reviewBtnColor}`}
       >
         振り返る
       </button>
