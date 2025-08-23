@@ -7,6 +7,7 @@ import {
   signOut,
 } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { useEffect, useState } from "react";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
@@ -37,4 +38,15 @@ export const logout = async () => {
   } catch (e) {
     console.error("ログアウト失敗:", e);
   }
+};
+
+export const usePageHeight = () => {
+  const [pageHeight, setPageHeight] = useState<number>(window.innerHeight);
+
+  useEffect(() => {
+    const h = Math.min(window.innerHeight, 900); // 最大900px
+    setPageHeight(h);
+  }, []);
+
+  return pageHeight;
 };

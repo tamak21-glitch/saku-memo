@@ -13,13 +13,21 @@ import {
   limit,
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
+import type { User } from "firebase/auth";
+import type { DocumentData } from "firebase/firestore";
+
+type MemoItem = {
+  uid: string;
+  text: string;
+  ts: number;
+};
 
 export default function Page() {
   const [text, setText] = useState("");
-  const [logs, setLogs] = useState([]);
+  const [logs, setLogs] = useState<MemoItem[]>([]);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const router = useRouter();
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState<User | null>(null);
 
   // 認証チェック＆未ログインなら /login へリダイレクト
   useEffect(() => {
@@ -44,7 +52,7 @@ export default function Page() {
         limit(50)
       );
       const snapshot = await getDocs(q);
-      setLogs(snapshot.docs.map((doc) => doc.data()));
+      setLogs(snapshot.docs.map((doc) => doc.data() as MemoItem));
     };
     fetchLogs();
   }, [user]);
@@ -70,8 +78,8 @@ export default function Page() {
         limit(50)
       );
       const snapshot = await getDocs(q);
-      setLogs(snapshot.docs.map((doc) => doc.data()));
-    } catch (e) {
+      setLogs(snapshot.docs.map((doc) => doc.data() as MemoItem));
+    } catch (e: any) {
       console.error("Firestore保存エラー:", e);
       alert("保存に失敗しました: " + e.message);
     }
@@ -87,24 +95,24 @@ export default function Page() {
   );
 
   return (
-    <main className="min-h-dvh bg-white text-gray-800 relative">
+    <main className="min-h-dvh bg-white relative flex flex-col items-center justify-center text-black">
       <textarea
         ref={taRef}
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder={"思ったことをすぐ書く!!"}
-        className="w-full h-full min-h-dvh resize-none rounded-none p-8 outline-none focus:outline-none text-lg placeholder:text-gray-400 bg-transparent"
+        placeholder={"考えたこととか、感じたことを書く"}
+        className="w-full h-full min-h-dvh resize-none rounded-none p-8 outline-none focus:outline-none text-lg placeholder:text-gray-400 bg-transparent text-black"
         autoFocus
       />
       <button
         onClick={save}
-        className="fixed right-6 bottom-6 rounded-full px-7 py-3 text-base shadow-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold transition"
+        className="fixed right-6 bottom-6 rounded-full px-7 py-3 text-base shadow-lg bg-gray-100 hover:bg-gray-200 text-black font-semibold transition"
       >
         保存
       </button>
       <button
         onClick={() => router.push("/review")}
-        className="fixed left-6 bottom-6 rounded-full px-7 py-3 text-base shadow-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold transition"
+        className="fixed left-6 bottom-6 rounded-full px-7 py-3 text-base shadow-lg bg-gray-100 hover:bg-gray-200 text-black font-semibold transition"
       >
         振り返り
       </button>
