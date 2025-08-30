@@ -13,6 +13,7 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import type { User } from "firebase/auth";
 import { useSwipeable } from "react-swipeable";
+import splitLogsToPages from '../../lib/pager';
 
 type MemoItem = {
   uid: string;
@@ -23,9 +24,10 @@ type MemoItem = {
 export default function ReviewPage() {
   const [logs, setLogs] = useState<MemoItem[]>([]);
   const [user, setUser] = useState<User | null>(null);
-  const [pageHeight, setPageHeight] = useState<number | null>(null);
+  const [pageHeight, setPageHeight] = useState<number>(0);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [pages, setPages] = useState<MemoItem[][]>([]);
+  const [lockedPages, setLockedPages] = useState<MemoItem[][]>([]);
   const router = useRouter();
 
   // 画面高さを CSS 変数にセット（アドレスバー対応・リサイズ対応）
@@ -88,187 +90,67 @@ export default function ReviewPage() {
   const TOP_PADDING = 36; // main 上余白（計測から除外）
   const [page, setPage] = useState(0);
 
-  // 正確なページ分割：計測用 DOM を生成して実際の高さを取得する
+  // ...existing code...
+
+  // lockedPages分割は初回のみ
   useEffect(() => {
-    if (!pageHeight) return;
-    const contentWidth =
-      contentRef.current?.clientWidth ?? Math.min(window.innerWidth - 64, 680);
-
-    const measurer = document.createElement("div");
-    Object.assign(measurer.style, {
-      position: "absolute",
-      visibility: "hidden",
-      left: "-9999px",
-      top: "0px",
-      width: `${contentWidth}px`,
-      fontFamily:
-        "'Kosugi Maru', 'Indie Flower', cursive, 'Noto Sans JP', sans-serif",
-      fontSize: `${FONT_SIZE}px`,
-      lineHeight: `${LINE_HEIGHT}px`,
-      whiteSpace: "pre-wrap",
-      boxSizing: "border-box",
-      padding: "0",
-      margin: "0",
-    } as CSSStyleDeclaration);
-    document.body.appendChild(measurer);
-
-    const arr: MemoItem[][] = [];
-    let current: MemoItem[] = [];
-    let currentHeight = TOP_PADDING;
-
-    const formatTimestamp = (ts: number) =>
-      `${new Date(ts).toLocaleDateString("ja-JP", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        weekday: "short",
-      })} ${new Date(ts).toLocaleTimeString("ja-JP", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })}`;
-
-    // logsは最新→古い順なので、ページ分割はそのまま
-    for (const l of logs) {
-      measurer.innerText = `${formatTimestamp(l.ts)}\n${l.text}`;
-      const h = Math.ceil(measurer.getBoundingClientRect().height);
-      const totalH = h + ITEM_GAP;
-
-      if (currentHeight + totalH > pageHeight && current.length > 0) {
-        arr.push(current);
-        current = [];
-        currentHeight = TOP_PADDING;
-      }
-      current.push(l);
-      currentHeight += totalH;
-    }
-    if (current.length > 0) arr.push(current);
-
-    document.body.removeChild(measurer);
-
-    // ページ配列を逆順にして、右端が最新ページ
-    const ordered = arr.length ? arr.reverse() : [[]];
-    setPages(ordered);
-    // 初期表示は右端（最新ページ）
-    setPage(Math.max(ordered.length - 1, 0));
-  }, [logs, pageHeight, FONT_SIZE, LINE_HEIGHT, ITEM_GAP, TOP_PADDING]);
-
-  // ★このuseEffectだけ残す（lockedPages方式）
-  useEffect(() => {
-    if (!pageHeight) return;
-    const contentWidth =
-      contentRef.current?.clientWidth ?? Math.min(window.innerWidth - 64, 680);
-
-    // 既存ページを保持（ページ確定型）
-    let prevPages = pages.length > 0 ? [...pages] : [];
-    let logsToProcess = logs.slice();
-
-    // 既存ページを再利用（満帆ページはそのまま）
-    let lockedPages: MemoItem[][] = [];
-    let lockedCount = 0;
-    for (const pageArr of prevPages) {
-      let pageHeightSum = TOP_PADDING;
-      for (const l of pageArr) {
-        const measurer = document.createElement("div");
+    if (pageHeight === 0) return;
+    if (logs.length === 0) return;
+    if (lockedPages.length === 0) {
+      const contentWidth = contentRef.current?.clientWidth ?? Math.min(window.innerWidth - 64, 680);
+      const pagesFromLogs = splitLogsToPages(logs, (text) => {
+        // create a DOM measurer similar to previous logic
+        const measurer = document.createElement('div');
         Object.assign(measurer.style, {
-          position: "absolute",
-          visibility: "hidden",
-          left: "-9999px",
-          top: "0px",
+          position: 'absolute',
+          visibility: 'hidden',
+          left: '-9999px',
+          top: '0px',
           width: `${contentWidth}px`,
-          fontFamily:
-            "'Kosugi Maru', 'Indie Flower', cursive, 'Noto Sans JP', sans-serif",
+          fontFamily: "'Kosugi Maru', 'Indie Flower', cursive, 'Noto Sans JP', sans-serif",
           fontSize: `${FONT_SIZE}px`,
           lineHeight: `${LINE_HEIGHT}px`,
-          whiteSpace: "pre-wrap",
-          boxSizing: "border-box",
-          padding: "0",
-          margin: "0",
+          whiteSpace: 'pre-wrap',
+          boxSizing: 'border-box',
+          padding: '0',
+          margin: '0',
         } as CSSStyleDeclaration);
         document.body.appendChild(measurer);
-        measurer.innerText = `${new Date(l.ts).toLocaleDateString("ja-JP", {
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-          weekday: "short",
-        })} ${new Date(l.ts).toLocaleTimeString("ja-JP", {
-          hour: "2-digit",
-          minute: "2-digit",
-        })}\n${l.text}`;
+        measurer.innerText = text;
         const h = Math.ceil(measurer.getBoundingClientRect().height);
         document.body.removeChild(measurer);
-        pageHeightSum += h + ITEM_GAP;
-      }
-      // ページが満帆ならロック
-      if (pageHeightSum > pageHeight) {
-        lockedPages.push(pageArr);
-        lockedCount += pageArr.length;
-      } else {
-        break;
+        return h;
+      }, contentWidth, pageHeight, FONT_SIZE, LINE_HEIGHT, ITEM_GAP, TOP_PADDING);
+      setLockedPages(pagesFromLogs);
+      setPages(pagesFromLogs.length ? pagesFromLogs : [[]]);
+      setPage(Math.max(pagesFromLogs.length - 1, 0));
+    }
+  }, [logs.length, pageHeight, FONT_SIZE, LINE_HEIGHT, ITEM_GAP, TOP_PADDING]);
+
+  // 新規メモ追加時はlockedPagesの後ろに新規ページのみ追加
+  useEffect(() => {
+    if (lockedPages.length === 0) return;
+    let lockedCount = 0;
+    for (const pageArr of lockedPages) {
+      lockedCount += pageArr.length;
+    }
+    const latestLogs = logs.slice(lockedCount);
+    let latestPages: MemoItem[][] = [];
+    if (latestLogs.length > 0) {
+      for (const l of latestLogs) {
+        latestPages.push([l]);
       }
     }
-
-    // ロックされた分を除いた新しいメモだけ分割
-    logsToProcess = logs.slice(lockedCount);
-
-    // 新しい分割
-    const arr: MemoItem[][] = [];
-    let current: MemoItem[] = [];
-    let currentHeight = TOP_PADDING;
-
-    const formatTimestamp = (ts: number) =>
-      `${new Date(ts).toLocaleDateString("ja-JP", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        weekday: "short",
-      })} ${new Date(ts).toLocaleTimeString("ja-JP", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })}`;
-
-    for (const l of logsToProcess) {
-      const measurer = document.createElement("div");
-      Object.assign(measurer.style, {
-        position: "absolute",
-        visibility: "hidden",
-        left: "-9999px",
-        top: "0px",
-        width: `${contentWidth}px`,
-        fontFamily:
-          "'Kosugi Maru', 'Indie Flower', cursive, 'Noto Sans JP', sans-serif",
-        fontSize: `${FONT_SIZE}px`,
-        lineHeight: `${LINE_HEIGHT}px`,
-        whiteSpace: "pre-wrap",
-        boxSizing: "border-box",
-        padding: "0",
-        margin: "0",
-      } as CSSStyleDeclaration);
-      document.body.appendChild(measurer);
-      measurer.innerText = `${formatTimestamp(l.ts)}\n${l.text}`;
-      const h = Math.ceil(measurer.getBoundingClientRect().height);
-      document.body.removeChild(measurer);
-      const totalH = h + ITEM_GAP;
-
-      if (currentHeight + totalH > pageHeight && current.length > 0) {
-        arr.push(current);
-        current = [];
-        currentHeight = TOP_PADDING;
-      }
-      current.push(l);
-      currentHeight += totalH;
-    }
-    if (current.length > 0) arr.push(current);
-
-    // ページ配列を逆順にして、右端が最新ページ
-    const ordered = [...lockedPages, ...arr].length ? [...lockedPages, ...arr].reverse() : [[]];
-    setPages(ordered);
-    setPage(Math.max(ordered.length - 1, 0));
-  }, [logs, pageHeight, FONT_SIZE, LINE_HEIGHT, ITEM_GAP, TOP_PADDING]);
+  // lockedPages is oldest->newest; append latestPages (each is newest entries)
+  const ordered = [...lockedPages, ...latestPages];
+  setPages(ordered.length ? ordered : [[]]);
+  setPage(Math.max(ordered.length - 1, 0));
+  }, [lockedPages.length, logs.length, pageHeight, FONT_SIZE, LINE_HEIGHT, ITEM_GAP, TOP_PADDING]);
 
   const handlers = useSwipeable({
-    // 最新ページから左スワイプで過去へ（index+1）、右スワイプで新しい（index-1）
-    onSwipedLeft: () => setPage((p) => Math.min(p + 1, pages.length - 1)),
-    onSwipedRight: () => setPage((p) => Math.max(0, p - 1)),
+  // 左スワイプで前の（左の）ページへ（index-1）、右スワイプで次の（右の）ページへ（index+1）
+  onSwipedLeft: () => setPage((p) => Math.max(0, p - 1)),
+  onSwipedRight: () => setPage((p) => Math.min(p + 1, pages.length - 1)),
     trackMouse: true,
   });
 
@@ -312,7 +194,7 @@ export default function ReviewPage() {
     >
       {/* PCで分かりやすくする左/右ボタン（タッチでも使える） */}
       <button
-        onClick={() => setPage((p) => Math.min(p + 1, pages.length - 1))}
+        onClick={() => setPage((p) => Math.max(0, p - 1))}
         aria-label="前のページ"
         style={{
           position: "absolute",
@@ -331,7 +213,7 @@ export default function ReviewPage() {
       </button>
 
       <button
-        onClick={() => setPage((p) => Math.max(0, p - 1))}
+        onClick={() => setPage((p) => Math.min(p + 1, pages.length - 1))}
         aria-label="次のページ"
         style={{
           position: "absolute",

@@ -71,8 +71,7 @@ export default function Page() {
         text: trimmed,
         ts: Date.now(),
       });
-      setText("");
-      taRef.current?.focus();
+  setText("");
 
       // 保存後にFirestoreから再取得
       const q = query(

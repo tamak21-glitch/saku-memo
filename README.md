@@ -22,6 +22,15 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 ## Learn More
 
+## 開発・テストの教訓
+
+useEffectの依存配列には、必ずプリミティブ値（数値・文字列・booleanなど）だけを渡すこと。
+依存配列の値は、初期値・状態変化で型や数・順序が変わらないよう厳密に設計すること。
+テストでは「初期値→値変更→再レンダリング」のシナリオを必ず含め、依存配列の変化によるバグを検証すること。
+テスト観点を事前に明示し、期待する動作・バグ検出ポイントを説明した上でテストを実施すること。
+修正を加えた際は、必ずテスト観点を明示し、自動テストを実行すること。
+useEffectの依存配列にはプリミティブ値（数値・文字列・boolean・userオブジェクトなど）だけを渡すこと。配列・オブジェクトは絶対に含めないこと。依存配列の初期値・型・数・順序は常に一定にすること。
+
 To learn more about Next.js, take a look at the following resources:
 
 - [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
