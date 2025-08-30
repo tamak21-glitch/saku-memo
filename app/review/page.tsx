@@ -148,9 +148,10 @@ export default function ReviewPage() {
   }, [lockedPages.length, logs.length, pageHeight, FONT_SIZE, LINE_HEIGHT, ITEM_GAP, TOP_PADDING]);
 
   const handlers = useSwipeable({
-  // 左スワイプで前の（左の）ページへ（index-1）、右スワイプで次の（右の）ページへ（index+1）
-  onSwipedLeft: () => setPage((p) => Math.max(0, p - 1)),
-  onSwipedRight: () => setPage((p) => Math.min(p + 1, pages.length - 1)),
+  // 左スワイプで次の（右の）ページへ（index+1）、右スワイプで前の（左の）ページへ（index-1）
+  // 左右ボタン・矢印キーは左=前(古い), 右=次(新しい) のため、スワイプは視覚的な動きに合わせて逆方向に進む挙動にする
+  onSwipedLeft: () => setPage((p) => Math.min(p + 1, pages.length - 1)),
+  onSwipedRight: () => setPage((p) => Math.max(0, p - 1)),
     trackMouse: true,
   });
 
